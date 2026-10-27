@@ -182,75 +182,36 @@ public:
   ConstHolder(T&& r) {
     if constexpr (std::is_trivially_copyable_v<T>) {
       val.emplace(std::move(r));
-      ptr = &val.value();
     } else {
       owned = std::make_shared<T>(std::move(r));
       ptr = owned.get();
     }
   }
 
-  ConstHolder(const ConstHolder& other) {
-    if constexpr (std::is_trivially_copyable_v<T>) {
-      if (other.val.has_value()) {
-        val.emplace(*other.val);
-        ptr = &val.value();
-      } else {
-        ptr = other.ptr;
-      }
-    } else {
-      owned = other.owned;
-      ptr = other.ptr;
-    }
-  }
-  ConstHolder(ConstHolder&& other) noexcept {
-    if constexpr (std::is_trivially_copyable_v<T>) {
-      if (other.val.has_value()) {
-        val.emplace(std::move(*other.val));
-        ptr = &val.value();
-      } else {
-        ptr = other.ptr;
-      }
-    } else {
-      owned = std::move(other.owned);
-      ptr = other.ptr;
-    }
-  }
+  // NOTE: for a trivially copyable T the inline value is never pointed to via
+  // ptr (a self-pointer would dangle after any relocation of this object);
+  // get() selects val or ptr instead.
+  ConstHolder(const ConstHolder& other) : val(other.val), owned(other.owned), ptr(other.ptr) {}
+  ConstHolder(ConstHolder&& other) noexcept
+  : val(std::move(other.val)), owned(std::move(other.owned)), ptr(other.ptr) {}
   ConstHolder& operator=(const ConstHolder& other) {
     if (this != &other) {
-      if constexpr (std::is_trivially_copyable_v<T>) {
-        if (other.val.has_value()) {
-          val.emplace(*other.val);
-          ptr = &val.value();
-        } else {
-          val.reset();
-          ptr = other.ptr;
-        }
-      } else {
-        owned = other.owned;
-        ptr = other.ptr;
-      }
+      val = other.val;
+      owned = other.owned;
+      ptr = other.ptr;
     }
     return *this;
   }
   ConstHolder& operator=(ConstHolder&& other) noexcept {
     if (this != &other) {
-      if constexpr (std::is_trivially_copyable_v<T>) {
-        if (other.val.has_value()) {
-          val.emplace(std::move(*other.val));
-          ptr = &val.value();
-        } else {
-          val.reset();
-          ptr = other.ptr;
-        }
-      } else {
-        owned = std::move(other.owned);
-        ptr = other.ptr;
-      }
+      val = std::move(other.val);
+      owned = std::move(other.owned);
+      ptr = other.ptr;
     }
     return *this;
   }
 
-  const T& get() const { return *ptr; }
+  const T& get() const { return val.has_value() ? *val : *ptr; }
 
   // Debug-only inspectors, not for production use -- confirm at runtime
   // which storage path is active instead of assuming from reading the
