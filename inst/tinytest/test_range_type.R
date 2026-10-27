@@ -53,6 +53,23 @@ code <- ast2ast::translate(f, getsource = TRUE)
 expect_equal(decl_of(code, "i"), "range")
 fcpp <- ast2ast::translate(f)
 expect_equal(fcpp(4L), sum(1:4) + sum(2:5) + sum(3:6))
+expect_equal(fcpp(1L), 1L + 2L + 3L)
+expect_equal(fcpp(0L), sum(1:0) + sum(2:1) + sum(3:2))
+
+# range copied, then the original is reassigned while iterating the copy
+f <- function(n) {
+  argtypes(n |> type(int))
+  i <- 1L:n
+  s <- 0L
+  for (r in 1L:3L) {
+    j <- i
+    i <- i * 2L
+    for (v in j) s <- s + v
+  }
+  return(s)
+}
+fcpp <- ast2ast::translate(f)
+expect_equal(fcpp(3L), sum(1:3) + sum(2*(1:3)) + sum(4*(1:3)))
 
 if (!at_home()) exit_file("slow: compiles; runs at home / CI only")
 
